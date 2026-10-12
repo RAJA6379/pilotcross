@@ -496,7 +496,53 @@ async function disconnectSolana() {
       setError(err?.shortMessage || err?.message || "Swap failed.");
     } finally { setConnecting(false); }
   }
+useEffect(() => {
+  if (!solanaAccount?.address) {
+    setSolanaTokenBalances([]);
+    return;
+  }
 
+  let active = true;
+
+  const loadBalances = async () => {
+    try {
+      const result = await getSolanaTokenBalances(
+        solanaAccount.address
+      );
+
+      if (active) setSolanaTokenBalances(result);
+    } catch (err) {
+      console.error("Solana balance error:", err);
+    }
+  };
+
+  loadBalances();
+
+  const timer = setInterval(loadBalances, 12000);
+
+  return () => {
+    active = false;
+    clearInterval(timer);
+  };
+}, [solanaAccount?.address]);
+
+const solanaBalanceFor = (symbol) => {
+  if (!solanaAccount) return "—";
+
+  const token = SOLANA_TOKENS.find(
+    (item) => item.symbol === symbol
+  );
+
+  const result = solanaTokenBalances.find(
+    (item) => item.mint === token?.mint
+  );
+
+  if (!result) return "—";
+
+  return Number(result.balance).toLocaleString("en-US", {
+    maximumFractionDigits: 6,
+  });
+};
   function swapTokens() { setFrom(to); setTo(from); }
 
   return (
@@ -985,7 +1031,13 @@ onClick={() => {
             <div className="field">
               <div className="field-label">
                 <span>You pay</span>
-                <span>Balance: {account ? Number(account.balance).toFixed(4) : "—"}</span>
+                <span>
+  Balance: {chainView === "solana"
+    ? solanaBalanceFor(from)
+    : account
+      ? String(tokenBalances[from] ?? "—")
+      : "—"}
+</span>
               </div>
               <div className="amount-row">
                 <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" inputMode="decimal" />
@@ -1071,17 +1123,5 @@ onClick={() => {
   };
 }, [solanaAccount?.address, chainView]);
 
-const solanaBalanceFor = (symbol) => {
-  const token = solanaTokenBalances.find(
-    (item) => item.symbol === symbol
-  );
 
-  return token
-    ? Number(token.balance).toLocaleString("en-US", {
-        maximumFractionDigits: 6,
-      })
-    : solanaAccount
-      ? "Loading..."
-      : "—";
-};
 }
